@@ -78,9 +78,45 @@ From the first `<p>` of each paper `<li>`, extract:
 - **Last name**: text before the first comma in the `<p>`, stripped of leading whitespace. For multi-author entries this is the first author's last name.
 - **Year**: four-digit year in parentheses.
 
-The **child `<ul>`** of each paper `<li>` contains the note body. Identify the **personal annotation section** as any direct child `<li>` whose first `<p>` text matches a user-defined label (e.g. `^\s*NOTES` or any consistent heading the user uses). All other child `<li>` items are PDF-summary sections.
+The **child `<ul>`** of each paper `<li>` contains the note body. Identify **personal annotation items** by recursively scanning **all descendant `<li>` elements** (not just direct children). Any `<li>` whose first `<p>` text matches `^\s*LABEL\b` (case-insensitive word boundary, where LABEL is the user's annotation label) is a personal annotation item. This covers section headers ("NOTES", "NOTES summary", "NOTES upshot", "NOTES:") and inline notes at any nesting depth ("NOTES: but this paper uses a different metric."). All other `<li>` elements are non-personal (PDF-summary) content.
 
-Ask the user what label they use for their personal annotation sections (e.g. "NOTES", "MY NOTES", initials, etc.) if not already known.
+Ask the user what label they use for their personal annotation sections (e.g. initials like "DY", "JRS", or a word like "NOTES", "MY NOTES") if not already known.
+
+Use `split_content` to recursively partition the tree, extracting personal annotation items from wherever they appear:
+
+```python
+def is_personal_li(li, label):
+    first_p = li.find('p')
+    return bool(first_p and re.match(rf'^\s*{re.escape(label)}\b', first_p.get_text(), re.IGNORECASE))
+
+def split_content(li_list, label):
+    """Recursively split <li> elements into personal and non-personal.
+    Personal <li>s (and their children) go to the personal block.
+    Within non-personal <li>s, recurse to extract any buried personal items.
+    Returns (personal_lis, nopersonal_lis).
+    """
+    personal_lis, nopersonal_lis = [], []
+    for li in li_list:
+        if is_personal_li(li, label):
+            personal_lis.append(li)
+        else:
+            child_ul = li.find('ul')
+            if child_ul:
+                child_lis = child_ul.find_all('li', recursive=False)
+                sub_personal, _ = split_content(child_lis, label)
+                for sub_li in sub_personal:
+                    sub_li.extract()   # remove from tree so non-personal HTML stays clean
+                personal_lis.extend(sub_personal)
+            nopersonal_lis.append(li)
+    return personal_lis, nopersonal_lis
+
+child_ul = paper_li.find('ul')
+if child_ul:
+    top_lis = child_ul.find_all('li', recursive=False)
+    personal_items, nopersonal_items = split_content(top_lis, label)
+else:
+    personal_items, nopersonal_items = [], []
+```
 
 ### Step 2 — Build the library ID map via SQLite (read-only)
 
@@ -162,19 +198,15 @@ conn.close()
 
 Omit `<hr/>` and personal block if no personal annotation items. Omit summary `<ul>` if no non-personal items. Strip `id`, `data-created`, `data-modified` attributes. Preserve `<strong>`, `<em>`, `<mark>`.
 
-### Step 5 — Check and post via Web API
+### Step 5 — Post via Web API
+
+Always insert a new note, even if other notes already exist on the item.
 
 ```python
 import requests, time
 
 BASE    = "https://api.zotero.org"
 HEADERS = {"Zotero-API-Key": ZOTERO_API_KEY, "Zotero-API-Version": "3"}
-
-def already_has_note(prefix, item_key):
-    r = requests.get(f"{BASE}{prefix}/items/{item_key}/children",
-                     headers=HEADERS, params={"itemType": "note"})
-    r.raise_for_status()
-    return any("Reading notes" in c.get("data", {}).get("note", "") for c in r.json())
 
 def post_note(prefix, item_key, note_html):
     payload = [{"itemType": "note", "parentItem": item_key,
@@ -192,14 +224,16 @@ for item_id, item_key, lib_id, title, year in matched_items:
         # unknown library — skip
         continue
     try:
-        if already_has_note(prefix, item_key):
-            record_skipped(item_key)
-        else:
-            post_note(prefix, item_key, note_html)
-            record_inserted(item_key)
+        post_note(prefix, item_key, note_html)
+        record_inserted(item_key)
     except requests.HTTPError as e:
-        if e.response.status_code == 403:
+        code = e.response.status_code
+        if code == 403:
             record_permission_denied(item_key, prefix)
+        elif code in (400, 404):
+            # Stale SQLite entry: key exists locally but not on the server
+            # (deleted, merged, or not yet synced). Log and continue.
+            record_error(item_key, f"{code}: {e.response.text[:80]}")
         else:
             raise
     time.sleep(0.15)
@@ -218,7 +252,7 @@ The script header must be:
 # ///
 ```
 
-The script should be fully self-contained: credentials, note HTML, and targets all embedded. Include a `already_has_note()` check so re-running is safe.
+The script should be fully self-contained: credentials, note HTML, and targets all embedded. Note: the script always inserts — re-running will create duplicate notes. If you need idempotent re-runs, filter the targets list to only items that were not yet inserted in the previous run.
 
 Tell the user:
 
@@ -236,9 +270,10 @@ After generating the script, report what will be imported:
 | Status | Count | Papers |
 |--------|-------|--------|
 | ✓ Will insert note | N | [list of author–year + item key] |
-| — Note already exists, will skip | N | [list] |
 | ✗ No Zotero match found | N | [full reference] |
 | ✗ Library not in group map | N | [list] |
+| ✗ 403 Permission denied | N | [list] |
+| ✗ 400/404 Stale key | N | Key in local SQLite but absent from server (deleted/merged item) |
 
 For unmatched papers, print the full reference so the user can investigate manually.
 

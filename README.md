@@ -115,7 +115,7 @@ What have I read most recently?
            ▸ Check whether their deforestation metric matches ours
    ```
 
-   The skill identifies paper entries by looking for a four-digit year in parentheses and a DOI hyperlink (or italicised journal name) in the same line — author names do not need to be bold. The last name is extracted as the text before the first comma. Child items become the note body. Any child section whose heading matches your personal initials or annotation label (e.g. `JRS`) is stored separately as a personal annotation block, kept out of faithfulness verdicts during manuscript audit.
+   The skill identifies paper entries by looking for a four-digit year in parentheses and a DOI hyperlink (or italicised journal name) in the same line — author names do not need to be bold. The last name is extracted as the text before the first comma. Child items become the note body. Any item (at any nesting depth) whose text starts with your personal annotation label followed by a word boundary is extracted and stored separately as a personal annotation block, kept out of faithfulness verdicts during manuscript audit. The label can be your initials or any consistent heading you use, and varied suffixes all work: `JRS`, `JRS:`, `JRS notes`, `JRS summary`, `JRS upshot`, or an inline note like `JRS: but this metric differs from ours`.
 
 3. Save as HTML (in Bike: hold Option when opening the File menu, then File → Save As… → HTML) and copy the file to your `~/Zotero/` folder
 4. Tell Claude:
@@ -130,7 +130,7 @@ Claude will match each entry to its Zotero item by author + year, generate a sel
 uv run ~/Zotero/zotero_note_import.py
 ```
 
-Then sync Zotero (`Cmd+Shift+S`). Re-running the script is safe — it skips items that already have a note.
+Then sync Zotero (`Cmd+Shift+S`). The script always inserts a new note — it will not skip items that already have a note from a previous run. If you need to re-run selectively, tell Claude which items to target and it will filter the script accordingly. Stale item keys (items deleted or merged in Zotero but still in the local SQLite) are caught and logged rather than crashing the script.
 
 ### Manuscript audit
 
