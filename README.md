@@ -132,6 +132,8 @@ uv run ~/Zotero/zotero_note_import.py
 
 Then sync Zotero (`Cmd+Shift+S`). The script always inserts a new note — it will not skip items that already have a note from a previous run. If you need to re-run selectively, tell Claude which items to target and it will filter the script accordingly. Stale item keys (items deleted or merged in Zotero but still in the local SQLite) are caught and logged rather than crashing the script.
 
+#### Run this at your own risk. Any time you write to a Zotero database, even using their API, there is a risk of inserting items that break their database.
+
 ### Manuscript audit
 
 ```
