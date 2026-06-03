@@ -231,4 +231,4 @@ You can also drive litmap entirely through Claude — just ask conceptual questi
 
 ## License
 
-MIT
+Apache 2.0
