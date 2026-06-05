@@ -48,11 +48,9 @@ DEFAULT_INBOX = Path.home() / "Downloads" / "zotero-inbox"
 DONE_SUBDIR = "done"
 LOG_FILE = Path.home() / "Library" / "Logs" / "zotero-inbox.log"
 ZOTERO_PING = "http://localhost:23119/connector/ping"
-ZOTERO_IMPORT = "http://localhost:23119/connector/import"
 CONNECT_TIMEOUT = 3    # seconds — fast fail if Zotero not running
-IMPORT_TIMEOUT = 30    # seconds — allow time for metadata retrieval
-# Brief pause between imports so Zotero can complete each before the next
-INTER_IMPORT_DELAY = 2  # seconds
+# Pause between imports so Zotero can complete each before the next
+INTER_IMPORT_DELAY = 3  # seconds
 
 
 # ---------------------------------------------------------------------------
@@ -118,27 +116,27 @@ def zotero_is_running() -> bool:
 
 
 def import_pdf(pdf_path: Path, logger: logging.Logger) -> bool:
-    """POST a PDF to Zotero's local connector import endpoint.
+    """Open a PDF with Zotero via macOS `open -a Zotero`.
 
-    Returns True on success (HTTP 200/201), False otherwise.
-    Zotero extracts metadata (DOI, title, authors) from the PDF automatically.
+    Zotero's file handler extracts metadata (DOI, title, authors) from the
+    PDF and creates a library item automatically. Returns True if the open
+    command succeeds (exit 0); Zotero handles the rest asynchronously.
     """
     try:
-        with open(pdf_path, "rb") as fh:
-            data = fh.read()
-        resp = requests.post(
-            ZOTERO_IMPORT,
-            headers={"Content-Type": "application/pdf"},
-            data=data,
-            timeout=IMPORT_TIMEOUT,
+        result = subprocess.run(
+            ["open", "-a", "Zotero", str(pdf_path)],
+            capture_output=True, text=True,
         )
-        if resp.status_code in (200, 201):
-            logger.info("Imported: %s", pdf_path.name)
+        if result.returncode == 0:
+            logger.info("Sent to Zotero: %s", pdf_path.name)
             return True
         else:
-            logger.warning("Import failed (HTTP %s): %s", resp.status_code, pdf_path.name)
+            logger.warning(
+                "open -a Zotero failed (exit %s): %s — %s",
+                result.returncode, pdf_path.name, result.stderr.strip(),
+            )
             return False
-    except requests.RequestException as exc:
+    except Exception as exc:
         logger.error("Import error for %s: %s", pdf_path.name, exc)
         return False
 
