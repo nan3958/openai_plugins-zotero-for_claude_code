@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  launchd job: watch ~/Downloads/zotero-inbox for new PDFs and import to Zotero.
+
+  SETUP (run once):
+    1. Edit this file — replace /Users/YOUR_USERNAME with your actual home path.
+    2. Copy to ~/Library/LaunchAgents/:
+           cp com.user.zotero-inbox.plist ~/Library/LaunchAgents/
+    3. Load the job:
+           launchctl load ~/Library/LaunchAgents/com.user.zotero-inbox.plist
+    4. Verify it loaded:
+           launchctl list | grep zotero-inbox
+
+  TO UNINSTALL:
+    launchctl unload ~/Library/LaunchAgents/com.user.zotero-inbox.plist
+    rm ~/Library/LaunchAgents/com.user.zotero-inbox.plist
+
+  LOGS:
+    ~/Library/Logs/zotero-inbox.log   (written by the script)
+    /tmp/zotero-inbox.stdout           (launchd stdout capture)
+    /tmp/zotero-inbox.stderr           (launchd stderr capture)
+-->
+<plist version="1.0">
+<dict>
+
+  <!-- Unique label for this launchd job -->
+  <key>Label</key>
+  <string>com.user.zotero-inbox</string>
+
+  <!-- Command to run. Edit the path to match your uv install and home dir. -->
+  <key>ProgramArguments</key>
+  <array>
+    <string>/Users/YOUR_USERNAME/.local/bin/uv</string>
+    <string>run</string>
+    <string>/Users/YOUR_USERNAME/src/Cowork/claude-zotero-skills/scripts/zotero-inbox.py</string>
+    <string>/Users/YOUR_USERNAME/Downloads/zotero-inbox</string>
+  </array>
+
+  <!-- Trigger: run whenever the inbox folder contents change -->
+  <key>WatchPaths</key>
+  <array>
+    <string>/Users/YOUR_USERNAME/Downloads/zotero-inbox</string>
+  </array>
+
+  <!-- Do NOT run at login — only run on folder change -->
+  <key>RunAtLoad</key>
+  <false/>
+
+  <!-- Capture output for debugging -->
+  <key>StandardOutPath</key>
+  <string>/tmp/zotero-inbox.stdout</string>
+  <key>StandardErrorPath</key>
+  <string>/tmp/zotero-inbox.stderr</string>
+
+  <!-- Restart throttle: don't run more than once per 5 seconds -->
+  <key>ThrottleInterval</key>
+  <integer>5</integer>
+
+</dict>
+</plist>
