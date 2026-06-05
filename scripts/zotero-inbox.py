@@ -30,9 +30,12 @@ from __future__ import annotations
 
 import argparse
 import logging
+import plistlib
 import shutil
+import subprocess
 import sys
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 
 import requests
@@ -71,6 +74,34 @@ def _setup_logging() -> logging.Logger:
     sh.setFormatter(fmt)
     logger.addHandler(sh)
     return logger
+
+
+# ---------------------------------------------------------------------------
+# Finder sort pinning
+# ---------------------------------------------------------------------------
+
+# Setting kMDItemDateAdded to a far-future date makes Finder always sort this
+# folder to the top when the enclosing folder is sorted by "Date Added".
+# plistlib binary format requires a naive datetime (no tzinfo).
+_PIN_DATE = datetime(2099, 12, 31)  # naive UTC — plistlib requirement
+_DATE_ADDED_ATTR = "com.apple.metadata:kMDItemDateAdded"
+
+
+def pin_date_added(folder: Path) -> None:
+    """Set kMDItemDateAdded to 2099-12-31 so the folder sorts to the top
+    of its parent in Finder when sorted by Date Added.
+
+    Uses xattr(1) (macOS built-in) — no extra Python packages required.
+    Silently skips if xattr is unavailable or the attribute cannot be set.
+    """
+    try:
+        data = plistlib.dumps(_PIN_DATE, fmt=plistlib.FMT_BINARY)
+        subprocess.run(
+            ["xattr", "-wx", _DATE_ADDED_ATTR, data.hex(), str(folder)],
+            check=True, capture_output=True,
+        )
+    except Exception:
+        pass  # non-fatal — sorting preference, not functional
 
 
 # ---------------------------------------------------------------------------
@@ -134,9 +165,10 @@ def main() -> int:
     logger = _setup_logging()
     logger.info("--- zotero-inbox triggered, scanning: %s", inbox)
 
-    # Ensure folders exist
+    # Ensure folders exist; pin inbox to top of Downloads by Date Added
     inbox.mkdir(parents=True, exist_ok=True)
     done_dir.mkdir(exist_ok=True)
+    pin_date_added(inbox)
 
     # Collect PDFs directly in inbox (not recursing into done/ or subdirs)
     pdfs = sorted(
