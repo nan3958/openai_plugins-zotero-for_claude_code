@@ -229,47 +229,6 @@ You can also drive litmap entirely through Claude — just ask conceptual questi
 
 ---
 
-## Scripts
-
-### `scripts/zotero-inbox.py` — Automatic PDF import via folder watch
-
-Drop PDFs into a designated folder (`~/Downloads/zotero-inbox` by default) and they are imported into Zotero automatically. Zotero retrieves metadata (title, authors, DOI) from each PDF. Successfully imported files are moved to a `done/` subfolder.
-
-**Requirements:** Zotero must be open when PDFs are added (uses the local connector API on `localhost:23119`). `uv` must be installed.
-
-**Setup (one-time):**
-
-```bash
-# 1. Create the inbox folder
-mkdir -p ~/Downloads/zotero-inbox
-
-# 2. Copy the launchd plist and edit YOUR_USERNAME to your actual username
-cp launchd/com.user.zotero-inbox.plist ~/Library/LaunchAgents/
-# Edit ~/Library/LaunchAgents/com.user.zotero-inbox.plist
-#   — replace all occurrences of /Users/YOUR_USERNAME with your home path
-
-# 3. Load the job
-launchctl load ~/Library/LaunchAgents/com.user.zotero-inbox.plist
-
-# 4. Verify
-launchctl list | grep zotero-inbox
-```
-
-**Test manually:**
-```bash
-uv run scripts/zotero-inbox.py ~/Downloads/zotero-inbox
-```
-
-**Logs:** `~/Library/Logs/zotero-inbox.log`
-
-**Uninstall:**
-```bash
-launchctl unload ~/Library/LaunchAgents/com.user.zotero-inbox.plist
-rm ~/Library/LaunchAgents/com.user.zotero-inbox.plist
-```
-
----
-
 ## License
 
 Apache 2.0
