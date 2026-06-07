@@ -224,7 +224,8 @@ You can also drive litmap entirely through Claude — just ask conceptual questi
 - [Zotero](https://www.zotero.org/) 6 or 9 (Zotero 9 adds annotation and "Added By" support)
 - [Claude Code](https://www.anthropic.com/claude-code) or [Cowork](https://www.anthropic.com/claude) desktop app
 - Python 3.11+ with [uv](https://github.com/astral-sh/uv) (for the notes-import script and litmap)
-- `pdfplumber` and `beautifulsoup4` (installed automatically by the notes-import script via `uv`)
+- `requests` and `beautifulsoup4` (installed automatically by the notes-import script via `uv`)
+- `pdfplumber` (used by `zotero-skill.md` for PDF reading — install globally with `pip install pdfplumber` or `uv tool install pdfplumber`)
 - An outliner that exports HTML with nested `<ul>/<li>` structure (e.g. [Bike](https://www.hogbaysoftware.com/bike/)) — required only for `zotero-notes-import.md`
 
 ---
