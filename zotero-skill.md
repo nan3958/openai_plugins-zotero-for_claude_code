@@ -9,9 +9,12 @@ description: "Use this skill whenever the user wants to query, search, or explor
 
 ## Setup
 
-**Database:** `~/Zotero/zotero.sqlite` (mounted dynamically — use the path resolution snippet below)
-**PDFs:** `<zotero_dir>/storage/<itemKey>/<filename>.pdf`
-**Reference file:** `<zotero_dir>/cowork-zotero-reference.md`
+<!-- WINDOWS ADAPTATION: paths configured for this machine -->
+**Database:** `C:\Users\Nan\Zotero\zotero.sqlite`
+**PDFs:** `<zotero_dir>\storage\<itemKey>\<filename>.pdf`
+**Reference file:** `<zotero_dir>\cowork-zotero-reference.md`
+**Zotero version:** 9.0.5 (all Zotero 9 features available)
+**Semantic search:** ZotSeek MCP (`http://localhost:23119/zotseek/mcp`) — use for Tier 4
 
 Read the reference file at the start of every session — it holds
 environment-specific facts (this machine's libraries, connection quirks,
@@ -20,14 +23,17 @@ for counts, collection listings, and field IDs — do not trust hardcoded
 numbers anywhere, including in this skill.**
 
 ```python
-import sqlite3, glob, os
+import sqlite3, os, platform
 
-# Resolve Zotero mount path dynamically (session ID changes each run)
-candidates = glob.glob('/sessions/*/mnt/Zotero/zotero.sqlite')
-if candidates:
-    db_path = candidates[0]
+# Windows: Zotero database path
+if platform.system() == 'Windows':
+    db_path = os.path.expanduser(r'~\Zotero\zotero.sqlite')
 else:
-    db_path = os.path.expanduser('~/Zotero/zotero.sqlite')
+    # macOS/Linux — resolve Zotero mount path dynamically (Cowork session ID changes)
+    import glob
+    candidates = glob.glob('/sessions/*/mnt/Zotero/zotero.sqlite')
+    db_path = candidates[0] if candidates else os.path.expanduser('~/Zotero/zotero.sqlite')
+
 zotero_dir = os.path.dirname(db_path)
 
 # Zotero holds a write lock while running. `mode=ro` fails with
@@ -149,7 +155,18 @@ text. Always read SI attachments too when they exist (see PDF-path section).
 
 ## Tier 4 — Semantic (model-backed)
 
-Use when the query is conceptual or paraphrased — i.e. when keyword search would miss synonyms, acronyms, or rephrasings. Tier 4 calls `litmap search` or `litmap cluster` against the local embeddings database. The first call after a fresh model download or a long idle takes 10–30 seconds while the embedding model warms up; subsequent calls within the same session are sub-second.
+<!-- WINDOWS ADAPTATION: Primary semantic search via ZotSeek MCP. litmap is optional and can be set up later. -->
+
+**Primary path (Windows/Zotero 9): Use the ZotSeek MCP tool `search` and `find_similar`.**  
+ZotSeek runs inside Zotero and uses Transformers.js with a local embedding model.  
+- Quick semantic search: `zotseek:search` with `query` and `mode: "hybrid"`  
+- Find similar papers: `zotseek:find_similar` with `item_key`  
+- Results include `zotero://` deep links, PDF page numbers, and matched snippets.  
+- Requires Zotero to be running. Index is built automatically after plugin install.
+
+**Secondary path (macOS/Linux, or when litmap is installed):** Use `litmap search` or `litmap cluster` against `~/LitLake/embeddings.db`. When litmap is available, it provides additional capabilities like clustering and UMAP visualization.
+
+Use Tier 4 when the query is conceptual or paraphrased — i.e. when keyword search would miss synonyms, acronyms, or rephrasings. The first call after a fresh model download or a long idle takes 10–30 seconds while the embedding model warms up; subsequent calls within the same session are sub-second.
 
 ### Pattern 4a — Natural-language query → ranked papers
 
@@ -281,8 +298,8 @@ Classify each result by filename:
 - **Supplementary** — filename contains any of: `supplement`, `supporting`, `appendix`,
   `SI`, `S1`, `S2`, `ESM`, `Online Resource`, `Data S`, `Table S`, `Figure S`
 
-PDF path: `<zotero_dir>/storage/<attachmentKey>/<filename>`
-where `<filename>` is the part of `ia.path` after `storage:`.
+PDF path: `<zotero_dir>\storage\<attachmentKey>\<filename>`
+where `<filename>` is the part of `ia.path` after `storage:`. On Windows use `os.path.join(zotero_dir, 'storage', attachmentKey, filename)`.
 
 **Always read supplementary files when they exist.** Information critical to a claim
 is often in the SI — extended methods, species lists, robustness checks, data tables.
@@ -470,10 +487,22 @@ GROUP BY i.itemID
 
 ## Tier 4 errors and edge cases
 
+<!-- WINDOWS/ZotSeek path -->
+**When using ZotSeek MCP (primary on this machine):**
+
 | Condition | Skill response |
 |---|---|
-| `litmap` command not found | "`litmap` is not installed. Run `uv pip install -e .` from `~/src/Cowork/litmap`." |
-| First-run model download | "First-run model download (~570 MB), this takes ~1 minute." |
-| `~/LitLake/embeddings.db` missing | "Embeddings database not found. Run `litmap sync` once to embed the library." |
+| Zotero not running | "ZotSeek MCP requires Zotero to be running. Start Zotero and try again." |
+| AI Agent Access disabled | "Go to Zotero → Settings → ZotSeek → AI Agent Access → enable 'Allow AI agents to search your library'." |
+| First search slow (>30s) | "First search loads the embedding model (~570 MB). Subsequent searches will be <100ms." |
+| `index_status.ready: false` | "ZotSeek index is still building. Check progress in Zotero → ZotSeek pane. This can take 30 min–2 hours for first run." |
+| Top result score < 0.005 (RRF) | "No strong semantic matches in your library. Consider rephrasing or broadening the query." |
+| No results at all | "The item may not be indexed yet. ZotSeek indexes incrementally after the first full build." |
+
+**When using litmap (secondary, if installed):**
+
+| Condition | Skill response |
+|---|---|
+| `litmap` command not found | "`litmap` is not installed. Run `uv pip install -e .` from `C:\Users\Nan\src\Cowork\litmap`." |
+| `C:\Users\Nan\LitLake\embeddings.db` missing | "Embeddings database not found. Run `litmap sync` once to embed the library." |
 | Auto-sync took > 30s on incremental | Note: "Sync took longer than usual — if you've recently added many papers, this is expected." |
-| Top result similarity < 0.5 | "No strong semantic matches in your library. Consider rephrasing or broadening the query." |
